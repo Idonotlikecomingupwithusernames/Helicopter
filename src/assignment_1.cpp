@@ -61,9 +61,14 @@ typedef struct {
 
 /* struct holding all necessary state variables for scene */
 struct {
-    /* camera */
+    /* cameras */
     Camera camera;
+    Camera cameraOrigin;
+    Camera cameraFollow;
     float zoomSpeedMultiplier;
+
+    /* this is a bandaid-fix but we're tired */
+    int whichCamera;
 
     /* plane mesh and transformation */
     Mesh planeMesh;
@@ -123,9 +128,21 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
         }
     }
 
-    if (key == GLFW_KEY_W) {
+    /*if (key == GLFW_KEY_W) {
         sInput.buttonReleased[0] = action == GLFW_RELEASE;
+    }*/
+
+    /* define active camera control */
+    if (key == GLFW_KEY_1 && action == GLFW_PRESS) {
+        sScene.camera = sScene.cameraOrigin;
+        sScene.whichCamera = 0;
     }
+
+    if (key == GLFW_KEY_2 && action == GLFW_PRESS) {
+        sScene.camera = sScene.cameraFollow;
+        sScene.whichCamera = 1;
+    }
+
 }
 
 /* GLFW callback function for mouse position events */
@@ -163,10 +180,15 @@ void windowResizeCallback(GLFWwindow *window, int width, int height) {
 
 /* function to setup and initialize the whole scene */
 void sceneInit(float width, float height) {
-    /* initialize camera */
-    sScene.camera = cameraCreate(width, height, to_radians(45.0f), 0.01f, 500.0f, {10.0f, 14.0f, 10.0f},
+    /* initialize cameras */
+    sScene.cameraOrigin = cameraCreate(width, height, to_radians(45.0f), 0.01f, 500.0f, {10.0f, 14.0f, 10.0f},
+                                 {0.0f, 0.0f, 0.0f});
+    sScene.cameraFollow = cameraCreate(width, height, to_radians(45.0f), 0.01f, 500.0f, {10.0f, 14.0f, 10.0f},
                                  {0.0f, 4.0f, 0.0f});
     sScene.zoomSpeedMultiplier = 0.05f;
+
+    sScene.camera = sScene.cameraOrigin;
+    sScene.whichCamera = 0;
 
     /* create opengl buffers for meshes */
     sScene.planeMesh = meshCreate(quad::vertexPos, quad::indices, groundPlane::color);
@@ -250,11 +272,21 @@ void sceneUpdate(float elapsedTime) {
     sScene.rotor.translationMatrix = Matrix4D::translation(v * elapsedTime) * sScene.rotor.translationMatrix;
     sScene.tailRotor.translationMatrix = Matrix4D::translation(v * elapsedTime) * sScene.tailRotor.translationMatrix;
 
-    /* udpate component transformation matrices with new rotations */
+    /* move cameraFollow with helicopter */
+    sScene.cameraFollow.position += v * elapsedTime;
+    sScene.cameraFollow.lookAt += v * elapsedTime;
+    sScene.camera = sScene.whichCamera ? sScene.cameraFollow : sScene.cameraOrigin;
+
+    /* udpate component transformation matrices with new rotations (missing implementation for non-body components (something to do with rotation origin)) */
     sScene.body.transformationMatrix = Matrix4D::rotationX(rotationDirX) * sScene.body.transformationMatrix;
     sScene.body.transformationMatrix = Matrix4D::rotationY(rotationDirY) * sScene.body.transformationMatrix;
     sScene.body.transformationMatrix = Matrix4D::rotationZ(rotationDirZ) * sScene.body.transformationMatrix;
 
+    /* perpetually rotate rotors */
+    sScene.rotor.transformationMatrix = Matrix4D::rotationY(2) * sScene.rotor.transformationMatrix;
+    sScene.tailRotor.transformationMatrix = Matrix4D::rotationZ(1.5) * sScene.tailRotor.transformationMatrix;
+
+    /* make helicopter return to original rotation after movement is complete */
     /*if (sInput.buttonReleased[0]){
         sScene.body.transformationMatrix = Matrix4D::identity() * sScene.body.transformationMatrix;
                // Matrix4D::rotationZ(0) * sScene.body.transformationMatrix;
