@@ -56,7 +56,8 @@ struct {
 struct {
     bool mouseLeftButtonPressed = false;
     Vector2D mousePressStart;
-    bool buttonPressed[12] = {false, false, false, false, false, false, false, false, false, false, false};
+    int buttonMap[12] = {GLFW_KEY_W, GLFW_KEY_S, GLFW_KEY_A, GLFW_KEY_D, GLFW_KEY_Q, GLFW_KEY_E, GLFW_KEY_LEFT_SHIFT, GLFW_KEY_SPACE, GLFW_KEY_I, GLFW_KEY_K, GLFW_KEY_J, GLFW_KEY_L};
+    bool buttonPressed[12] = {false, false, false, false, false, false, false, false, false, false, false, false};
     bool buttonReleased[1] = {false};
 } sInput;
 
@@ -75,43 +76,19 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
     }
 
     /* input for cube control */
-    if (key == GLFW_KEY_W) {
-        sInput.buttonPressed[0] = (action == GLFW_PRESS || action == GLFW_REPEAT);
-    }
-    if (key == GLFW_KEY_S) {
-        sInput.buttonPressed[1] = (action == GLFW_PRESS || action == GLFW_REPEAT);
+    for(int i = 0; i < 12; i++){
+        if(i<8){
+            if (key == sInput.buttonMap[i]) {
+                sInput.buttonPressed[i] = (action == GLFW_PRESS || action == GLFW_REPEAT);
+            }
+        }
+        else {
+            if (key == sInput.buttonMap[i]){
+                sInput.buttonPressed[i] = (action == GLFW_PRESS);
+            }
+        }
     }
 
-    if (key == GLFW_KEY_A) {
-        sInput.buttonPressed[2] = (action == GLFW_PRESS || action == GLFW_REPEAT);
-    }
-    if (key == GLFW_KEY_D) {
-        sInput.buttonPressed[3] = (action == GLFW_PRESS || action == GLFW_REPEAT);
-    }
-    if (key == GLFW_KEY_Q) {
-        sInput.buttonPressed[4] = (action == GLFW_PRESS || action == GLFW_REPEAT);
-    }
-    if (key == GLFW_KEY_E) {
-        sInput.buttonPressed[5] = (action == GLFW_PRESS || action == GLFW_REPEAT);
-    }
-    if (key == GLFW_KEY_LEFT_SHIFT) {
-        sInput.buttonPressed[6] = (action == GLFW_PRESS || action == GLFW_REPEAT);
-    }
-    if (key == GLFW_KEY_SPACE) {
-        sInput.buttonPressed[7] = (action == GLFW_PRESS || action == GLFW_REPEAT);
-    }
-    if (key == GLFW_KEY_W) {
-        sInput.buttonPressed[8] = (action == GLFW_PRESS);
-    }
-    if (key == GLFW_KEY_A){
-        sInput.buttonPressed[9] = (action == GLFW_PRESS);
-    }
-    if (key == GLFW_KEY_D){
-        sInput.buttonPressed[10] = (action == GLFW_PRESS);
-    }
-    if (key == GLFW_KEY_S){
-        sInput.buttonPressed[11] = (action == GLFW_PRESS);
-    }
     if (key == GLFW_KEY_W) {
         sInput.buttonReleased[0] = action == GLFW_RELEASE;
     }
@@ -182,58 +159,19 @@ void sceneInit(float width, float height) {
 
 /* function to move and update objects in scene (e.g., rotate cube according to user input) */
 void sceneUpdate(float elapsedTime) {
+    int forwardBackward = sInput.buttonPressed[0] - sInput.buttonPressed[1];
+
+    int upDown = (sInput.buttonPressed[6] - sInput.buttonPressed[7]);
+
+    int leftRight = sInput.buttonPressed[2] - sInput.buttonPressed[3];
+
     /* if 'w' or 's' pressed, cube should rotate around x axis */
-    int forwardBackward = 0;
-    if (sInput.buttonPressed[0]) {
-        forwardBackward = -1;
-    } else if (sInput.buttonPressed[1]) {
-        forwardBackward = 1;
-    }
-
-    float rotationDirZ = 0;
-    if(sInput.buttonPressed[8]){
-        rotationDirZ = 0.01;
-    } else if (sInput.buttonPressed[10]){
-        rotationDirZ = -0.01;
-    } else {
-        rotationDirZ = 0;
-    }
-
-    float rotationDirX = 0;
-    if(sInput.buttonPressed[9]){
-        rotationDirX = 0.01;
-    } else if (sInput.buttonPressed[11]){
-        rotationDirX = -0.01;
-    } else {
-        rotationDirX = 0;
-    }
+    float rotationDirX = 0.01 * (sInput.buttonPressed[8] - sInput.buttonPressed[9]);
 
     /* if 'a' or 'd' pressed, cube should rotate around y axis */
-    int leftRight = 0;
-    if (sInput.buttonPressed[2]) {
-        leftRight = 1;
-    } else if (sInput.buttonPressed[3]) {
-        leftRight = -1;
-    }
+    int rotationDirY = (sInput.buttonPressed[4] - sInput.buttonPressed[5]);
 
-    int rotationDirY = 0;
-    if (sInput.buttonPressed[4]) {
-        rotationDirY = -1;
-    } else if (sInput.buttonPressed[5]) {
-        rotationDirY = 1;
-    }
-
-    int upDown = 0;
-    if (sInput.buttonPressed[6]) {
-        upDown = -1;
-    } else if (sInput.buttonPressed[7]) {
-        upDown = 1;
-    }
-
-    int i = 0;
-    if (sInput.buttonReleased[0]){
-        i = 0;
-    }
+    float rotationDirZ = 0.01 * (sInput.buttonPressed[10] - sInput.buttonPressed[11]);
 
     /* udpate cube transformation matrix to include new rotation if one of the keys was pressed */
     if (rotationDirY != 0) {
@@ -246,6 +184,12 @@ void sceneUpdate(float elapsedTime) {
 
     if (forwardBackward != 0) {
         Vector3D v = {(float) forwardBackward, 0, 0};
+        if(rotationDirZ<0){
+            printf("Negative \n");
+        }
+        /*if(rotationDirZ>0){
+            printf("Positive \n");
+        }*/
         sScene.cubeTransformationMatrix =
                 Matrix4D::translation(v * elapsedTime) *
                 Matrix4D::rotationZ(rotationDirZ) *
