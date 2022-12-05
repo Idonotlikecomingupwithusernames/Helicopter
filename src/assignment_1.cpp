@@ -6,6 +6,8 @@
 #include "mygl/geometry.h"
 #include "mygl/camera.h"
 
+
+
 /* translation, scale and color for the ground plane */
 namespace groundPlane {
     const Vector4D color = {0.9f, 0.9f, 0.9f, 1.0f};
@@ -14,17 +16,48 @@ namespace groundPlane {
 }
 
 /* translation, scale and color for the scaled cube */
-namespace scaledCube {
+namespace scaledBody {
     const Vector4D color = {0.9f, 0.0f, 0.0f, 1.0f};
-    const Matrix4D scale = Matrix4D::scale(5.0f, 2.2f, 1.6f);
+    const Matrix4D scale = Matrix4D::scale(2.5f, 1.1f, 0.8f);
     const Matrix4D trans = Matrix4D::translation({0.0f, 4.0f, 0.0f});
 }
 
 namespace scaledTail {
     const Vector4D color = {0.9f, 0.0f, 0.0f, 1.0f};
-    const Matrix4D scale = Matrix4D::scale(5.0f, 0.6f, 0.6f);
-    const Matrix4D trans = Matrix4D::translation({0.0f, 4.0f, 0.0f});
+    const Matrix4D scale = Matrix4D::scale(2.5f, 0.3f, 0.3f);
+    const Matrix4D trans = Matrix4D::translation({-5.0f, 4.8f, 0.0f});
 }
+
+namespace scaledPontoonLeft {
+    const Vector4D color = {0.0f, 0.0f, 0.0f, 1.0f};
+    const Matrix4D scale = Matrix4D::scale(2.8f, 0.15f, 0.2f);
+    const Matrix4D trans = Matrix4D::translation({-0.1f, 2.75f, -0.9f});
+}
+
+namespace scaledPontoonRight {
+    const Vector4D color = {0.0f, 0.0f, 0.0f, 1.0f};
+    const Matrix4D scale = Matrix4D::scale(2.8f, 0.15f, 0.2f);
+    const Matrix4D trans = Matrix4D::translation({-0.1f, 2.75f, 0.9f});
+}
+
+namespace scaledRotor {
+    const Vector4D color = {0.0f, 0.0f, 0.0f, 1.0f};
+    const Matrix4D scale = Matrix4D::scale(5.0f, 0.05f, 0.1f);
+    const Matrix4D trans = Matrix4D::translation({0.0f, 5.15f, 0.0f});
+}
+
+namespace scaledTailRotor {
+    const Vector4D color = {0.0f, 0.0f, 0.0f, 1.0f};
+    const Matrix4D scale = Matrix4D::scale(0.1f, 0.8f, 0.05f);
+    const Matrix4D trans = Matrix4D::translation({-7.0f, 4.8f, 0.35f});
+}
+
+typedef struct {
+        Mesh mesh;
+        Matrix4D scalingMatrix;
+        Matrix4D translationMatrix;
+        Matrix4D transformationMatrix;
+    } component;
 
 /* struct holding all necessary state variables for scene */
 struct {
@@ -36,17 +69,18 @@ struct {
     Mesh planeMesh;
     Matrix4D planeModelMatrix;
 
-    /* cube mesh and transformations */
-    Mesh cubeMesh;
-    Matrix4D cubeScalingMatrix;
-    Matrix4D cubeTranslationMatrix;
-    Matrix4D cubeTransformationMatrix;
-    float cubeSpinRadPerSecond;
+    /* components are defined in struct component */
+    component body;
+    component tail;
+    component pontoonL;
+    component pontoonR;
+    component rotor;
+    component tailRotor;
 
-    Mesh tailMesh;
-    Matrix4D tailScalingMatrix;
-    Matrix4D tailTranslationMatrix;
-    Matrix4D tailTransformationMatrix;
+    /* This was an attempt to streamline component processing */
+    /*component heliParts[6];*/
+
+    float helicopterSpinRadPerSecond;
 
     /* shader */
     ShaderProgram shaderColor;
@@ -75,7 +109,7 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
         screenshotToPNG("screenshot.png");
     }
 
-    /* input for cube control */
+    /* input for helicopter control */
     for(int i = 0; i < 12; i++){
         if(i<8){
             if (key == sInput.buttonMap[i]) {
@@ -134,92 +168,98 @@ void sceneInit(float width, float height) {
                                  {0.0f, 4.0f, 0.0f});
     sScene.zoomSpeedMultiplier = 0.05f;
 
-    /* create opengl buffers for mesh */
+    /* create opengl buffers for meshes */
     sScene.planeMesh = meshCreate(quad::vertexPos, quad::indices, groundPlane::color);
-    sScene.cubeMesh = meshCreate(cube::vertexPos, cube::indices, scaledCube::color);
-    sScene.tailMesh = meshCreate(tail::vertexPos, tail::indices, scaledCube::color);
+    sScene.body.mesh = meshCreate(cube::vertexPos, cube::indices, scaledBody::color);
+    sScene.tail.mesh = meshCreate(cube::vertexPos, cube::indices, scaledTail::color);
+    sScene.pontoonL.mesh = meshCreate(cube::vertexPos, cube::indices, scaledPontoonLeft::color);
+    sScene.pontoonR.mesh = meshCreate(cube::vertexPos, cube::indices, scaledPontoonRight::color);
+    sScene.rotor.mesh = meshCreate(cube::vertexPos, cube::indices, scaledRotor::color);
+    sScene.tailRotor.mesh = meshCreate(cube::vertexPos, cube::indices, scaledTailRotor::color);
+
+    /* This was an attempt to streamline component processing */
+    /*sScene.heliParts[0] = sScene.body;
+    sScene.heliParts[1] = sScene.tail;
+    sScene.heliParts[2] = sScene.pontoonL;
+    sScene.heliParts[3] = sScene.pontoonR;
+    sScene.heliParts[4] = sScene.rotor;
+    sScene.heliParts[5] = sScene.tailRotor;*/
+
 
     /* setup transformation matrices for objects */
     sScene.planeModelMatrix = groundPlane::trans * groundPlane::scale;
 
-    sScene.cubeScalingMatrix = scaledCube::scale;
-    sScene.cubeTranslationMatrix = scaledCube::trans;
-    sScene.cubeTransformationMatrix = Matrix4D::identity();
+    sScene.body.scalingMatrix = scaledBody::scale;
+    sScene.body.translationMatrix = scaledBody::trans;
+    sScene.body.transformationMatrix = Matrix4D::identity();
 
-    sScene.tailScalingMatrix = scaledTail::scale;
-    sScene.tailTranslationMatrix = scaledTail::trans;
-    sScene.tailTransformationMatrix = Matrix4D::identity();
+    sScene.tail.scalingMatrix = scaledTail::scale;
+    sScene.tail.translationMatrix = scaledTail::trans;
+    sScene.tail.transformationMatrix = Matrix4D::identity();
 
+    sScene.pontoonL.scalingMatrix = scaledPontoonLeft::scale;
+    sScene.pontoonL.translationMatrix = scaledPontoonLeft::trans;
+    sScene.pontoonL.transformationMatrix = Matrix4D::identity();
 
-    sScene.cubeSpinRadPerSecond = M_PI / 2.0f;
+    sScene.pontoonR.scalingMatrix = scaledPontoonRight::scale;
+    sScene.pontoonR.translationMatrix = scaledPontoonRight::trans;
+    sScene.pontoonR.transformationMatrix = Matrix4D::identity();
+
+    sScene.rotor.scalingMatrix = scaledRotor::scale;
+    sScene.rotor.translationMatrix = scaledRotor::trans;
+    sScene.rotor.transformationMatrix = Matrix4D::identity();
+
+    sScene.tailRotor.scalingMatrix = scaledTailRotor::scale;
+    sScene.tailRotor.translationMatrix = scaledTailRotor::trans;
+    sScene.tailRotor.transformationMatrix = Matrix4D::identity();
+
+    sScene.helicopterSpinRadPerSecond = M_PI / 2.0f;
 
     /* load shader from file */
     sScene.shaderColor = shaderLoad("shader/default.vert", "shader/default.frag");
 }
 
-/* function to move and update objects in scene (e.g., rotate cube according to user input) */
+/* function to move and update objects in scene (e.g., rotate helicopter according to user input) */
 void sceneUpdate(float elapsedTime) {
+    
+    /* if 'w' or 's' is pressed, helicopter should move along x axis */
     int forwardBackward = sInput.buttonPressed[0] - sInput.buttonPressed[1];
 
-    int upDown = (sInput.buttonPressed[6] - sInput.buttonPressed[7]);
+    /* if 'space' or 'left_shift' is pressed, helicopter should move along y axis */
+    int upDown = (sInput.buttonPressed[7] - sInput.buttonPressed[6] );
 
-    int leftRight = sInput.buttonPressed[2] - sInput.buttonPressed[3];
+    /* if 'a' or 'd' is pressed, helicopter should move along z axis */
+    int leftRight = sInput.buttonPressed[3] - sInput.buttonPressed[2];
 
-    /* if 'w' or 's' pressed, cube should rotate around x axis */
+    /* if 'i' or 'k' is pressed, helicopter should rotate around x axis */
     float rotationDirX = 0.01 * (sInput.buttonPressed[8] - sInput.buttonPressed[9]);
 
-    /* if 'a' or 'd' pressed, cube should rotate around y axis */
-    int rotationDirY = (sInput.buttonPressed[4] - sInput.buttonPressed[5]);
+    /* if 'q' or 'e' is pressed, helicopter should rotate around y axis */
+    float rotationDirY = 0.03 * (sInput.buttonPressed[4] - sInput.buttonPressed[5]);
 
+    /* if 'j' or 'l' is pressed, helicopter should rotate around z axis */
     float rotationDirZ = 0.01 * (sInput.buttonPressed[10] - sInput.buttonPressed[11]);
 
-    /* udpate cube transformation matrix to include new rotation if one of the keys was pressed */
-    if (rotationDirY != 0) {
-        sScene.cubeTransformationMatrix =
-                Matrix4D::rotationY(rotationDirY * sScene.cubeSpinRadPerSecond * elapsedTime) *
-                //           Matrix4D::rotationX(rotationDirX * sScene.cubeSpinRadPerSecond * elapsedTime) *
-                sScene.cubeTransformationMatrix;
-    }
+    /* update translation matrices with new positions (looping over components did not work) */
+    Vector3D v = { (float) forwardBackward, (float) upDown, (float) leftRight};
 
+    sScene.body.translationMatrix = Matrix4D::translation(v * elapsedTime) * sScene.body.translationMatrix;
+    sScene.tail.translationMatrix = Matrix4D::translation(v * elapsedTime) * sScene.tail.translationMatrix;
+    sScene.pontoonL.translationMatrix = Matrix4D::translation(v * elapsedTime) * sScene.pontoonL.translationMatrix;
+    sScene.pontoonR.translationMatrix = Matrix4D::translation(v * elapsedTime) * sScene.pontoonR.translationMatrix;
+    sScene.rotor.translationMatrix = Matrix4D::translation(v * elapsedTime) * sScene.rotor.translationMatrix;
+    sScene.tailRotor.translationMatrix = Matrix4D::translation(v * elapsedTime) * sScene.tailRotor.translationMatrix;
 
-    if (forwardBackward != 0) {
-        Vector3D v = {(float) forwardBackward, 0, 0};
-        if(rotationDirZ<0){
-            printf("Negative \n");
-        }
-        /*if(rotationDirZ>0){
-            printf("Positive \n");
-        }*/
-        sScene.cubeTransformationMatrix =
-                Matrix4D::translation(v * elapsedTime) *
-                Matrix4D::rotationZ(rotationDirZ) *
-                sScene.cubeTransformationMatrix;
-    }
+    /* udpate component transformation matrices with new rotations */
+    sScene.body.transformationMatrix = Matrix4D::rotationX(rotationDirX) * sScene.body.transformationMatrix;
+    sScene.body.transformationMatrix = Matrix4D::rotationY(rotationDirY) * sScene.body.transformationMatrix;
+    sScene.body.transformationMatrix = Matrix4D::rotationZ(rotationDirZ) * sScene.body.transformationMatrix;
 
-    if (leftRight != 0) {
-        Vector3D v = {0, 0, (float) leftRight};
-        sScene.cubeTransformationMatrix =
-                Matrix4D::translation(v * elapsedTime) *
-                Matrix4D::rotationX(rotationDirX) *
-                sScene.cubeTransformationMatrix;
-    }
+    /*if (sInput.buttonReleased[0]){
+        sScene.body.transformationMatrix = Matrix4D::identity() * sScene.body.transformationMatrix;
+               // Matrix4D::rotationZ(0) * sScene.body.transformationMatrix;
+    }*/
 
-    if (upDown != 0){
-        Vector3D v = { 0, (float) upDown, 0};
-        sScene.cubeTransformationMatrix =
-                Matrix4D::translation(v * elapsedTime) *
-                sScene.cubeTransformationMatrix;
-    }
-
-    if (sInput.buttonReleased[0]){
-        sScene.cubeTransformationMatrix = Matrix4D::identity() * sScene.cubeTransformationMatrix;
-               // Matrix4D::rotationZ(0) * sScene.cubeTransformationMatrix;
-    }
-
-    /*   if(leftRight != 0){
-           sScene.cubeTransformationMatrix =
-                   Matrix4D::
-       }*/
 }
 
 /* function to draw all objects in the scene */
@@ -243,12 +283,30 @@ void sceneDraw() {
 
         /* draw cube, requires to calculate the final model matrix from all transformations */
         shaderUniform(sScene.shaderColor, "uModel",
-                      sScene.cubeTranslationMatrix * sScene.cubeTransformationMatrix * sScene.cubeScalingMatrix);
-   //     shaderUniform(sScene.shaderColor, "uModel",
-   //                   sScene.tailTranslationMatrix * sScene.tailTransformationMatrix * sScene.tailScalingMatrix);
+                      sScene.body.translationMatrix * sScene.body.transformationMatrix * sScene.body.scalingMatrix);
         shaderUniform(sScene.shaderColor, "checkerboard", false);
-        glBindVertexArray(sScene.cubeMesh.vao);
-        glDrawElements(GL_TRIANGLES, sScene.cubeMesh.size_ibo, GL_UNSIGNED_INT, nullptr);
+        glBindVertexArray(sScene.body.mesh.vao);
+        glDrawElements(GL_TRIANGLES, sScene.body.mesh.size_ibo, GL_UNSIGNED_INT, nullptr);
+        
+        shaderUniform(sScene.shaderColor, "uModel", sScene.tail.translationMatrix * sScene.tail.transformationMatrix * sScene.tail.scalingMatrix);
+        glBindVertexArray(sScene.tail.mesh.vao);
+        glDrawElements(GL_TRIANGLES, sScene.tail.mesh.size_ibo, GL_UNSIGNED_INT, nullptr);
+
+        shaderUniform(sScene.shaderColor, "uModel", sScene.pontoonL.translationMatrix * sScene.pontoonL.transformationMatrix * sScene.pontoonL.scalingMatrix);
+        glBindVertexArray(sScene.pontoonL.mesh.vao);
+        glDrawElements(GL_TRIANGLES, sScene.pontoonL.mesh.size_ibo, GL_UNSIGNED_INT, nullptr);
+
+        shaderUniform(sScene.shaderColor, "uModel", sScene.pontoonR.translationMatrix * sScene.pontoonR.transformationMatrix * sScene.pontoonR.scalingMatrix);
+        glBindVertexArray(sScene.pontoonR.mesh.vao);
+        glDrawElements(GL_TRIANGLES, sScene.pontoonR.mesh.size_ibo, GL_UNSIGNED_INT, nullptr);
+
+        shaderUniform(sScene.shaderColor, "uModel", sScene.rotor.translationMatrix * sScene.rotor.transformationMatrix * sScene.rotor.scalingMatrix);
+        glBindVertexArray(sScene.rotor.mesh.vao);
+        glDrawElements(GL_TRIANGLES, sScene.rotor.mesh.size_ibo, GL_UNSIGNED_INT, nullptr);
+
+        shaderUniform(sScene.shaderColor, "uModel", sScene.tailRotor.translationMatrix * sScene.tailRotor.transformationMatrix * sScene.tailRotor.scalingMatrix);
+        glBindVertexArray(sScene.tailRotor.mesh.vao);
+        glDrawElements(GL_TRIANGLES, sScene.tailRotor.mesh.size_ibo, GL_UNSIGNED_INT, nullptr);
     }
 
     /* cleanup opengl state */
@@ -304,7 +362,7 @@ int main(int argc, char **argv) {
     /* delete opengl shader and buffers */
     shaderDelete(sScene.shaderColor);
     meshDelete(sScene.planeMesh);
-    meshDelete(sScene.cubeMesh);
+    meshDelete(sScene.body.mesh);
 
     /* cleanup glfw/glcontext */
     windowDelete(window);
